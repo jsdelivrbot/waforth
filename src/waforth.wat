@@ -39,12 +39,11 @@
     "\u0000\u0061\u0073\u006D" ;; Header
     "\u0001\u0000\u0000\u0000" ;; Version
 
-    "\u0001" "\u0011" ;; Type section
-      "\u0004" ;; #Entries
-        "\u0060\u0000\u0000" ;; (func)
+    "\u0001" "\u000f" ;; Type section
+      "\u0003" ;; #Entries
+        "\u0060\u0002\u007F\u007F\u0001\u007f" ;; (func)
         "\u0060\u0001\u007F\u0000" ;; (func (param i32))
         "\u0060\u0000\u0001\u007F" ;; (func (result i32))
-        "\u0060\u0001\u007f\u0001\u007F" ;; (func (param i32) (result i32))
 
     "\u0002" "\u0039" ;; Import section
       "\u0004" ;; #Entries
@@ -92,8 +91,6 @@
 (define !lengthMask #x1F)
 
 ;; Predefined table indices
-(define !pushIndex 1)
-(define !popIndex 2)
 (define !displayIndex 3)
 (define !pushDataAddressIndex 4)
 (define !pushDataValueIndex 5)
@@ -145,7 +142,7 @@
 
   (memory (export "memory") (!/ !memorySize 65536))
 
-  (type $word (func (param i32)))
+  (type $word (func (param $tos i32) (param i32) (result i32)))
 
   (global $tos (mut i32) (i32.const !stackBase))
   (global $state (mut i32) (i32.const 0))
@@ -155,148 +152,155 @@
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   ;; 6.1.0010 ! 
-  (func $! (param i32)
+  (func $! (param $tos i32) (param i32) (result i32)
     (local $bbtos i32)
-    (i32.store (i32.load (i32.sub (get_global $tos) (i32.const 4)))
-               (i32.load (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))))
-    (set_global $tos (get_local $bbtos)))
+    (i32.store (i32.load (i32.sub (get_local $tos) (i32.const 4)))
+               (i32.load (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))))
+    (get_local $bbtos))
   (!def_word "!" "$!")
 
   ;; 6.1.0090
-  (func $star (param i32)
+  (func $star (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
-    (i32.store (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))
-               (i32.mul (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4))))
+    (i32.store (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))
+               (i32.mul (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4))))
                         (i32.load (get_local $bbtos))))
-    (set_global $tos (get_local $btos)))
+    (get_local $btos))
   (!def_word "*" "$star")
 
   ;; 6.1.0120
-  (func $plus (param i32)
+  (func $plus (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
-    (i32.store (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))
-               (i32.add (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4))))
+    (i32.store (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))
+               (i32.add (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4))))
                         (i32.load (get_local $bbtos))))
-    (set_global $tos (get_local $btos)))
+    (get_local $btos))
   (!def_word "+" "$plus")
 
   ;; 6.1.0140
-  (func $plus-loop (param i32)
+  (func $plus-loop (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compilePlusLoop))
+    (call $compilePlusLoop)
+    (get_local $tos))
   (!def_word "+LOOP" "$plus-loop" !fImmediate)
 
   ;; 6.1.0150
-  (func $comma (param i32)
+  (func $comma (param $tos i32) (param i32) (result i32)
     (i32.store
       (get_global $here)
-      (i32.load (i32.sub (get_global $tos) (i32.const 4))))
+      (i32.load (i32.sub (get_local $tos) (i32.const 4))))
     (set_global $here (i32.add (get_global $here) (i32.const 4)))
-    (set_global $tos (i32.sub (get_global $tos) (i32.const 4))))
+    (i32.sub (get_local $tos) (i32.const 4)))
   (!def_word "," "$comma")
 
   ;; 6.1.0160
-  (func $minus (param i32)
+  (func $minus (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
-    (i32.store (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))
+    (i32.store (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))
                (i32.sub (i32.load (get_local $bbtos))
-                        (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4))))))
-    (set_global $tos (get_local $btos)))
+                        (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4))))))
+    (get_local $btos))
   (!def_word "-" "$minus")
 
   ;; 6.1.0180
-  (func $.q (param i32)
+  (func $.q (param $tos i32) (param i32) (result i32)
     (call $Sq (i32.const -1))
-    (call $emitICall (i32.const 0) (i32.const !displayIndex)))
+    (call $emitICall (i32.const 0) (i32.const !displayIndex))
+    (get_local $tos))
   (!def_word ".\"" "$.q" !fImmediate)
 
   ;; 6.1.0230
-  (func $/ (param i32)
+  (func $/ (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
-    (i32.store (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))
+    (i32.store (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))
                (i32.div_s (i32.load (get_local $bbtos))
-                          (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4))))))
-    (set_global $tos (get_local $btos)))
+                          (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4))))))
+    (get_local $btos))
   (!def_word "/" "$/")
 
   ;; 6.1.0240
-  (func $/MOD (param i32)
+  (func $/MOD (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
     (local $n1 i32)
     (local $n2 i32)
-    (i32.store (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))
+    (i32.store (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))
                (i32.rem_s (tee_local $n1 (i32.load (get_local $bbtos)))
-                          (tee_local $n2 (i32.load (tee_local $btos (i32.sub (get_global $tos) 
+                          (tee_local $n2 (i32.load (tee_local $btos (i32.sub (get_local $tos) 
                                                                              (i32.const 4)))))))
-    (i32.store (get_local $btos) (i32.div_s (get_local $n1) (get_local $n2))))
+    (i32.store (get_local $btos) (i32.div_s (get_local $n1) (get_local $n2)))
+    (get_local $tos))
   (!def_word "/MOD" "$/MOD")
 
   ;; 6.1.0250
-  (func $0< (param i32)
+  (func $0< (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (if (i32.lt_s (i32.load (tee_local $btos (i32.sub (get_global $tos) 
+    (if (i32.lt_s (i32.load (tee_local $btos (i32.sub (get_local $tos) 
                                                      (i32.const 4))))
                   (i32.const 0))
       (then (i32.store (get_local $btos) (i32.const -1)))
-      (else (i32.store (get_local $btos) (i32.const 0)))))
+      (else (i32.store (get_local $btos) (i32.const 0))))
+    (get_local $tos))
   (!def_word "0<" "$0<")
 
 
   ;; 6.1.0270
-  (func $zero-equals (param i32)
+  (func $zero-equals (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (if (i32.eqz (i32.load (tee_local $btos (i32.sub (get_global $tos) 
+    (if (i32.eqz (i32.load (tee_local $btos (i32.sub (get_local $tos) 
                                                      (i32.const 4)))))
       (then (i32.store (get_local $btos) (i32.const -1)))
-      (else (i32.store (get_local $btos) (i32.const 0)))))
+      (else (i32.store (get_local $btos) (i32.const 0))))
+    (get_local $tos))
   (!def_word "0=" "$zero-equals")
 
   ;; 6.1.0290
-  (func $one-plus (param i32)
+  (func $one-plus (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (i32.store (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))
-               (i32.add (i32.load (get_local $btos)) (i32.const 1))))
+    (i32.store (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))
+               (i32.add (i32.load (get_local $btos)) (i32.const 1)))
+    (get_local $tos))
   (!def_word "1+" "$one-plus")
 
   ;; 6.1.0300
-  (func $one-minus (param i32)
+  (func $one-minus (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (i32.store (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))
-               (i32.sub (i32.load (get_local $btos)) (i32.const 1))))
+    (i32.store (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))
+               (i32.sub (i32.load (get_local $btos)) (i32.const 1)))
+    (get_local $tos))
   (!def_word "1-" "$one-minus")
 
   ;; 6.1.0370 
-  (func $two-drop (param i32)
-    (set_global $tos (i32.sub (get_global $tos) (i32.const 8))))
+  (func $two-drop (param $tos i32) (param i32) (result i32)
+    (i32.sub (get_local $tos) (i32.const 8)))
   (!def_word "2DROP" "$two-drop")
 
   ;; 6.1.0380
-  (func $two-dupe (param i32)
-    (i32.store (get_global $tos)
-               (i32.load (i32.sub (get_global $tos) (i32.const 8))))
-    (i32.store (i32.add (get_global $tos) (i32.const 4))
-               (i32.load (i32.sub (get_global $tos) (i32.const 4))))
-    (set_global $tos (i32.add (get_global $tos) (i32.const 8))))
+  (func $two-dupe (param $tos i32) (param i32) (result i32)
+    (i32.store (get_local $tos)
+               (i32.load (i32.sub (get_local $tos) (i32.const 8))))
+    (i32.store (i32.add (get_local $tos) (i32.const 4))
+               (i32.load (i32.sub (get_local $tos) (i32.const 4))))
+    (i32.add (get_local $tos) (i32.const 8)))
   (!def_word "2DUP" "$two-dupe")
 
   ;; 6.1.0450
-  (func $colon (param i32)
+  (func $colon (param $tos i32) (param i32) (result i32)
     (call $create (i32.const -1))
     (call $hidden)
     (set_global $cp (i32.const !moduleBodyBase))
     (set_global $currentLocal (i32.const 0))
     (set_global $localsCount (i32.const 0))
     (call $right-bracket (i32.const -1))
-    )
+    (get_local $tos))
   (!def_word ":" "$colon")
 
   ;; 6.1.0460
-  (func $semicolon (param i32)
+  (func $semicolon (param $tos i32) (param i32) (result i32)
     (local $bodySize i32)
 
     (call $emitEnd)
@@ -328,109 +332,120 @@
     (set_global $nextTableIndex (i32.add (get_global $nextTableIndex) (i32.const 1)))
 
     (call $hidden)
-    (call $left-bracket (i32.const -1)))
+    (call $left-bracket (i32.const -1))
+    (get_local $tos))
   (!def_word ";" "$semicolon" !fImmediate)
 
   ;; 6.1.0480
-  (func $less-than (param i32)
+  (func $less-than (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
-    (if (i32.lt_s (i32.load (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8))))
-                  (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))))
+    (if (i32.lt_s (i32.load (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8))))
+                  (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))))
       (then (i32.store (get_local $bbtos) (i32.const -1)))
       (else (i32.store (get_local $bbtos) (i32.const 0))))
-    (set_global $tos (get_local $btos)))
+    (get_local $btos))
   (!def_word "<" "$less-than")
 
   ;; 6.1.0540
-  (func $greater-than (param i32)
+  (func $greater-than (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
-    (if (i32.gt_s (i32.load (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8))))
-                  (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))))
+    (if (i32.gt_s (i32.load (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8))))
+                  (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))))
       (then (i32.store (get_local $bbtos) (i32.const -1)))
       (else (i32.store (get_local $bbtos) (i32.const 0))))
-    (set_global $tos (get_local $btos)))
+    (get_local $btos))
   (!def_word ">" "$greater-than")
 
   ;; 6.1.0630 
-  (func $?DUP (param i32)
+  (func $?DUP (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (if (i32.ne (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4))))
+    (if (i32.ne (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4))))
                 (i32.const 0))
       (then
-        (i32.store (get_global $tos)
+        (i32.store (get_local $tos)
                    (i32.load (get_local $btos)))
-        (set_global $tos (i32.add (get_global $tos) (i32.const 4))))))
+        (i32.add (get_local $tos) (i32.const 4)))
+      (else
+        (get_local $tos))))
   (!def_word "?DUP" "$?DUP")
 
   ;; 6.1.0650
-  (func $@ (param i32)
+  (func $@ (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (i32.store (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))
-               (i32.load (i32.load (get_local $btos)))))
+    (i32.store (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))
+               (i32.load (i32.load (get_local $btos))))
+    (get_local $tos))
   (!def_word "@" "$@")
 
   ;; 6.1.0710
-  (func $ALLOT (param i32)
-    (set_global $here (i32.add (get_global $here) (call $pop))))
+  (func $ALLOT (param $tos i32) (param i32) (result i32)
+    (set_global $here (i32.add (get_global $here) (call $pop)))
+    (get_local $tos))
   (!def_word "ALLOT" "$ALLOT")
 
   ;; 6.1.0705
-  (func $ALIGN (param i32)
+  (func $ALIGN (param $tos i32) (param i32) (result i32)
     (set_global $here (i32.and
                         (i32.add (get_global $here) (i32.const 3))
-                        (i32.const -4 #| ~3 |#))))
+                        (i32.const -4 #| ~3 |#)))
+    (get_local $tos))
   (!def_word "ALIGN" "$ALIGN")
 
   ;; 6.1.0750 
-  (func $BASE (param i32)
-   (i32.store (get_global $tos) (i32.const !baseBase))
-   (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
+  (func $BASE (param $tos i32) (param i32) (result i32)
+   (i32.store (get_local $tos) (i32.const !baseBase))
+   (i32.add (get_local $tos) (i32.const 4)))
   (!def_word "BASE" "$BASE")
   
   ;; 6.1.0760 
-  (func $begin (param i32)
+  (func $begin (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compileBegin))
+    (call $compileBegin)
+    (get_local $tos))
   (!def_word "BEGIN" "$begin" !fImmediate)
 
   ;; 6.1.0770
-  (func $bl (param i32) (call $push (i32.const 32)))
+  (func $bl (param $tos i32) (param i32) (result i32) 
+    (call $push (get_local $tos) (i32.const 32)))
   (!def_word "BL" "$bl")
 
   ;; 6.1.0850
-  (func $c-store (param i32)
+  (func $c-store (param $tos i32) (param i32) (result i32)
     (local $bbtos i32)
-    (i32.store8 (i32.load (i32.sub (get_global $tos) (i32.const 4)))
-                (i32.load (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))))
-    (set_global $tos (get_local $bbtos)))
+    (i32.store8 (i32.load (i32.sub (get_local $tos) (i32.const 4)))
+                (i32.load (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))))
+    (get_local $bbtos))
   (!def_word "C!" "$c-store")
 
   ;; 6.1.0870
-  (func $c-fetch (param i32)
+  (func $c-fetch (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (i32.store (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))
-               (i32.load8_u (i32.load (get_local $btos)))))
+    (i32.store (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))
+               (i32.load8_u (i32.load (get_local $btos))))
+    (get_local $tos))
   (!def_word "C@" "$c-fetch")
 
   ;; 6.1.0895
-  (func $CHAR (param i32)
+  (func $CHAR (param $tos i32) (param i32) (result i32)
     (call $word (i32.const -1))
-    (i32.store (i32.sub (get_global $tos) (i32.const 4))
-               (i32.load8_u (i32.const (!+ !wordBase 4)))))
+    (i32.store (i32.sub (get_local $tos) (i32.const 4))
+               (i32.load8_u (i32.const (!+ !wordBase 4))))
+    (get_local $tos))
   (!def_word "CHAR" "$CHAR")
 
   ;; 6.1.0950
-  (func $CONSTANT (param i32)
+  (func $CONSTANT (param $tos i32) (param i32) (result i32)
     (call $create (i32.const -1))
     (i32.store (call $body (get_global $latest)) (i32.const !pushDataValueIndex))
     (i32.store (get_global $here) (call $pop))
-    (set_global $here (i32.add (get_global $here) (i32.const 4))))
+    (set_global $here (i32.add (get_global $here) (i32.const 4)))
+    (get_local $tos))
   (!def_word "CONSTANT" "$CONSTANT")
 
   ;; 6.1.1000
-  (func $create (param i32)
+  (func $create (param $tos i32) (param i32) (result i32)
     (local $length i32)
 
     (i32.store (get_global $here) (get_global $latest))
@@ -450,46 +465,48 @@
 
     ;; Leave space for the code pointer
     (i32.store (get_global $here) (i32.const 0))
-    (set_global $here (i32.add (get_global $here) (i32.const 4))))
+    (set_global $here (i32.add (get_global $here) (i32.const 4)))
+    (get_local $tos))
   (!def_word "CREATE" "$create")
 
   ;; 6.1.1240
-  (func $do (param i32)
+  (func $do (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
     (call $compileDo))
   (!def_word "DO" "$do" !fImmediate)
 
   ;; 6.1.1250
-  ; (func $DOES> (param i32))
+  ; (func $DOES> (param $tos i32) (param i32) (result i32))
   ; (!def_word "DOES>" "$DOES>")
 
   ;; 6.1.1260
-  (func $drop (param i32)
-    (set_global $tos (i32.sub (get_global $tos) (i32.const 4))))
+  (func $drop (param $tos i32) (param i32) (result i32)
+    (i32.sub (get_local $tos) (i32.const 4)))
   (!def_word "DROP" "$drop")
 
   ;; 6.1.1290
-  (func $dupe (param i32)
+  (func $dupe (param $tos i32) (param i32) (result i32)
    (i32.store
-    (get_global $tos)
-    (i32.load (i32.sub (get_global $tos) (i32.const 4))))
-   (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
+    (get_local $tos)
+    (i32.load (i32.sub (get_local $tos) (i32.const 4))))
+   (i32.add (get_local $tos) (i32.const 4)))
   (!def_word "DUP" "$dupe")
 
   ;; 6.1.1310
-  (func $else (param i32)
+  (func $else (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compileElse))
+    (call $compileElse)
+    (get_local $tos))
   (!def_word "ELSE" "$else" !fImmediate)
 
   ;; 6.1.1320
-  (func $emit (param i32)
-   (call $shell_emit (i32.load (i32.sub (get_global $tos) (i32.const 4))))
-   (set_global $tos (i32.sub (get_global $tos) (i32.const 4))))
+  (func $emit (param $tos i32) (param i32) (result i32)
+   (call $shell_emit (i32.load (i32.sub (get_local $tos) (i32.const 4))))
+   (i32.sub (get_local $tos) (i32.const 4)))
   (!def_word "EMIT" "$emit")
 
   ;; 6.1.1550
-  (func $find (export "FIND") (param i32)
+  (func $find (export "FIND") (param $tos i32) (param i32) (result i32)
     (local $entryP i32)
     (local $entryNameP i32)
     (local $entryLF i32)
@@ -499,7 +516,7 @@
     (local $wordEnd i32)
 
     (set_local $wordLength 
-               (i32.load (tee_local $wordStart (i32.load (i32.sub (get_global $tos) 
+               (i32.load (tee_local $wordStart (i32.load (i32.sub (get_local $tos) 
                                                                   (i32.const 4))))))
     (set_local $wordStart (i32.add (get_local $wordStart) (i32.const 4)))
     (set_local $wordEnd (i32.add (get_local $wordStart) (get_local $wordLength)))
@@ -525,7 +542,7 @@
                   (br_if $endCompareLoop (i32.eq (get_local $wordP)
                                                  (get_local $wordEnd)))
                   (br $compareLoop)))
-              (i32.store (i32.sub (get_global $tos) (i32.const 4))
+              (i32.store (i32.sub (get_local $tos) (i32.const 4))
                          (get_local $entryP))
               (if (i32.eq (i32.and (get_local $entryLF) (i32.const !fImmediate)) (i32.const 0))
                 (then
@@ -536,102 +553,112 @@
         (set_local $entryP (i32.load (get_local $entryP)))
         (br_if $endLoop (i32.eqz (get_local $entryP)))
         (br $loop)))
-    (call $push (i32.const 0)))
+    (call $push (get_local $tos) (i32.const 0)))
   (!def_word "FIND" "$find")
 
   ;; 6.1.1650
-  (func $here (param i32)
-   (i32.store (get_global $tos) (get_global $here))
-   (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
+  (func $here (param $tos i32) (param i32) (result i32)
+   (i32.store (get_local $tos) (get_global $here))
+   (i32.add (get_local $tos) (i32.const 4)))
   (!def_word "HERE" "$here")
 
   ;; 6.1.1680
-  (func $i (param i32)
+  (func $i (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compilePushLocal (i32.sub (get_global $currentLocal) (i32.const 1))))
+    (call $compilePushLocal (i32.sub (get_global $currentLocal) (i32.const 1)))
+    (get_local $tos))
   (!def_word "I" "$i" !fImmediate)
 
   ;; 6.1.1700
-  (func $if (param i32)
+  (func $if (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compileIf))
+    (call $compileIf)
+    (get_local $tos))
   (!def_word "IF" "$if" !fImmediate)
 
   ;; 6.1.1710
-  (func $immediate (param i32)
+  (func $immediate (param $tos i32) (param i32) (result i32)
     (i32.store 
       (i32.add (get_global $latest) (i32.const 4))
       (i32.or 
         (i32.load (i32.add (get_global $latest) (i32.const 4)))
-        (i32.const !fImmediate))))
+        (i32.const !fImmediate)))
+    (get_local $tos))
   (!def_word "IMMEDIATE" "$immediate")
 
   ;; 6.1.1730
-  (func $j (param i32)
+  (func $j (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compilePushLocal (i32.sub (get_global $currentLocal) (i32.const 3))))
+    (call $compilePushLocal (i32.sub (get_global $currentLocal) (i32.const 3)))
+    (get_local $tos))
   (!def_word "J" "$j" !fImmediate)
 
   ;; 6.1.1750
-  (func $key (param i32)
-   (i32.store (get_global $tos) (call $readChar))
-   (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
+  (func $key (param $tos i32) (param i32) (result i32)
+   (i32.store (get_local $tos) (call $readChar))
+   (i32.add (get_local $tos) (i32.const 4)))
   (!def_word "KEY" "$key")
 
   ;; 6.1.1780
-  (func $literal (param i32)
-    (call $compilePushConst (call $pop)))
+  (func $literal (param $tos i32) (param i32) (result i32)
+    (call $compilePushConst (i32.load (get_local $tos)))
+    (i32.sub (get_local $tos) (i32.const 4)))
   (!def_word "LITERAL" "$literal" !fImmediate)
 
   ;; 6.1.1800
-  (func $loop (param i32)
+  (func $loop (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compileLoop))
+    (call $compileLoop)
+    (get_local $tos))
   (!def_word "LOOP" "$loop" !fImmediate)
 
   ;; 6.1.1910
-  (func $negate (param i32)
+  (func $negate (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (i32.store (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))
-               (i32.sub (i32.const 0) (i32.load (get_local $btos)))))
+    (i32.store (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))
+               (i32.sub (i32.const 0) (i32.load (get_local $btos))))
+    (get_local $tos))
   (!def_word "NEGATE" "$negate")
 
   ;; 6.1.1990
-  (func $over (param i32)
-    (i32.store (get_global $tos)
-               (i32.load (i32.sub (get_global $tos) (i32.const 8))))
-    (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
+  (func $over (param $tos i32) (param i32) (result i32)
+    (i32.store (get_local $tos)
+               (i32.load (i32.sub (get_local $tos) (i32.const 8))))
+    (i32.add (get_local $tos) (i32.const 4)))
   (!def_word "OVER" "$over")
 
   ;; 6.1.2120 
-  (func $RECURSE (param i32) 
-    (call $compileRecurse))
+  (func $RECURSE (param $tos i32) (param i32) (result i32) 
+    (call $compileRecurse)
+    (get_local $tos))
   (!def_word "RECURSE" "$RECURSE" !fImmediate)
 
 
   ;; 6.1.2140
-  (func $repeat (param i32)
+  (func $repeat (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compileRepeat))
+    (call $compileRepeat)
+    (get_local $tos))
   (!def_word "REPEAT" "$repeat" !fImmediate)
 
   ;; 6.1.2160 ROT 
-  (func $ROT (param i32)
+  (func $ROT (param $tos i32) (param i32) (result i32)
     (local $tmp i32)
     (local $btos i32)
     (local $bbtos i32)
     (local $bbbtos i32)
-    (set_local $tmp (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))))
+    (set_local $tmp (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))))
     (i32.store (get_local $btos) 
-               (i32.load (tee_local $bbbtos (i32.sub (get_global $tos) (i32.const 12)))))
+               (i32.load (tee_local $bbbtos (i32.sub (get_local $tos) (i32.const 12)))))
     (i32.store (get_local $bbbtos) 
-               (i32.load (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))))
+               (i32.load (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))))
     (i32.store (get_local $bbtos) 
-               (get_local $tmp)))
+               (get_local $tmp))
+    (get_local $tos))
   (!def_word "ROT" "$ROT")
 
   ;; 6.1.2165
-  (func $Sq (param i32)
+  (func $Sq (param $tos i32) (param i32) (result i32)
     (local $c i32)
     (local $start i32)
     (set_local $start (get_global $here))
@@ -646,59 +673,66 @@
         (br $loop)))
     (call $compilePushConst (get_local $start))
     (call $compilePushConst (i32.sub (get_global $here) (get_local $start)))
-    (call $ALIGN (i32.const -1)))
+    (call $ALIGN (get_local $tos) (i32.const -1)))
   (!def_word "S\"" "$Sq" !fImmediate)
 
   ;; 6.1.2220
-  (func $space (param i32) (call $bl (i32.const -1)) (call $emit (i32.const -1)))
+  (func $space (param $tos i32) (param i32) (result i32) 
+    (set_local $tos (call $bl (get_local $tos) (i32.const -1)) )
+    (call $emit (get_local $tos) (i32.const -1)))
   (!def_word "SPACE" "$space")
 
 
   ;; 6.1.2260
-  (func $swap (param i32)
+  (func $swap (param $tos i32) (param i32) (result i32)
     (local $btos i32)
     (local $bbtos i32)
     (local $tmp i32)
-    (set_local $tmp (i32.load (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8)))))
+    (set_local $tmp (i32.load (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8)))))
     (i32.store (get_local $bbtos) 
-               (i32.load (tee_local $btos (i32.sub (get_global $tos) (i32.const 4)))))
-    (i32.store (get_local $btos) (get_local $tmp)))
+               (i32.load (tee_local $btos (i32.sub (get_local $tos) (i32.const 4)))))
+    (i32.store (get_local $btos) (get_local $tmp))
+    (get_local $tos))
   (!def_word "SWAP" "$swap")
 
   ;; 6.1.2270
-  (func $then (param i32)
+  (func $then (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compileThen))
+    (call $compileThen)
+    (get_local $tos))
   (!def_word "THEN" "$then" !fImmediate)
 
   ;; 6.2.2295
-  (func $TO (param i32)
+  (func $TO (param $tos i32) (param i32) (result i32)
     (call $word (i32.const -1))
     (if (i32.eqz (i32.load (i32.const !wordBase))) (then (unreachable)))
     (call $find (i32.const -1))
     (if (i32.eqz (call $pop)) (unreachable))
-    (i32.store (i32.add (call $body (call $pop)) (i32.const 4)) (call $pop)))
+    (i32.store (i32.add (call $body (call $pop)) (i32.const 4)) (call $pop))
+    (get_local $tos))
   (!def_word "TO" "$TO")
 
   ;; 6.2.2405
   (!def_word "VALUE" "$CONSTANT")
 
   ;; 6.1.2410
-  (func $VARIABLE (param i32)
+  (func $VARIABLE (param $tos i32) (param i32) (result i32)
     (call $create (i32.const -1))
     (i32.store (call $body (get_global $latest)) (i32.const !pushDataAddressIndex))
     (i32.store (get_global $here) (i32.const 0))
-    (set_global $here (i32.add (get_global $here) (i32.const 4))))
+    (set_global $here (i32.add (get_global $here) (i32.const 4)))
+    (get_local $tos))
   (!def_word "VARIABLE" "$VARIABLE")
 
   ;; 6.1.2430
-  (func $while (param i32)
+  (func $while (param $tos i32) (param i32) (result i32)
     (if (i32.eqz (get_global $state)) (unreachable))
-    (call $compileWhile))
+    (call $compileWhile)
+    (get_local $tos))
   (!def_word "WHILE" "$while" !fImmediate)
 
   ;; 6.1.2450
-  (func $word (export "WORD") (param i32)
+  (func $word (export "WORD") (param $tos i32) (param i32) (result i32)
     (local $char i32)
     (local $stringPtr i32)
 
@@ -742,52 +776,55 @@
      (i32.store (i32.const !wordBase) 
        (i32.sub (get_local $stringPtr) (i32.const (!+ !wordBase 4))))
      
-     (call $push (i32.const !wordBase)))
+     (call $push (get_local $tos) (i32.const !wordBase)))
   (!def_word "WORD" "$word")
 
   ;; 6.1.2500
-  (func $left-bracket (param i32)
-    (set_global $state (i32.const 0)))
+  (func $left-bracket (param $tos i32) (param i32) (result i32)
+    (set_global $state (i32.const 0))
+    (get_local $tos))
   (!def_word "[" "$left-bracket" !fImmediate)
 
   ;; 6.1.2540
-  (func $right-bracket (param i32)
-    (set_global $state (i32.const 1)))
+  (func $right-bracket (param $tos i32) (param i32) (result i32)
+    (set_global $state (i32.const 1))
+    (get_local $tos))
   (!def_word "]" "$right-bracket")
 
   ;; 6.2.0280
-  (func $zero-greater (param i32)
+  (func $zero-greater (param $tos i32) (param i32) (result i32)
     (local $btos i32)
-    (if (i32.gt_s (i32.load (tee_local $btos (i32.sub (get_global $tos) 
+    (if (i32.gt_s (i32.load (tee_local $btos (i32.sub (get_local $tos) 
                                                      (i32.const 4))))
                   (i32.const 0))
       (then (i32.store (get_local $btos) (i32.const -1)))
-      (else (i32.store (get_local $btos) (i32.const 0)))))
+      (else (i32.store (get_local $btos) (i32.const 0))))
+    (get_local $tos))
   (!def_word "0>" "$zero-greater")
 
   ;; 6.2.1350
-  (func $erase (param i32)
+  (func $erase (param $tos i32) (param i32) (result i32)
     (local $bbtos i32)
-    (call $memset (i32.load (tee_local $bbtos (i32.sub (get_global $tos) (i32.const 8))))
+    (call $memset (i32.load (tee_local $bbtos (i32.sub (get_local $tos) (i32.const 8))))
                   (i32.const 0)
-                  (i32.load (i32.sub (get_global $tos) (i32.const 4))))
-    (set_global $tos (get_local $bbtos)))
+                  (i32.load (i32.sub (get_local $tos) (i32.const 4))))
+    (get_local $bbtos))
   (!def_word "ERASE" "$erase")
 
-  (func $dspFetch (param i32)
+  (func $dspFetch (param $tos i32) (param i32) (result i32)
     (i32.store
-     (get_global $tos)
-     (get_global $tos))
-    (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
+     (get_local $tos)
+     (get_local $tos))
+    (i32.add (get_local $tos) (i32.const 4)))
   (!def_word "DSP@" "$dspFetch")
 
-  (func $S0 (param i32)
-    (call $push (i32.const !stackBase)))
+  (func $S0 (param $tos i32) (param i32) (result i32)
+    (call $push (get_local $tos) (i32.const !stackBase)))
   (!def_word "S0" "$S0")
 
-  (func $latest (param i32)
-   (i32.store (get_global $tos) (get_global $latest))
-   (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
+  (func $latest (param $tos i32) (param i32) (result i32)
+   (i32.store (get_local $tos) (get_global $latest))
+   (i32.add (get_local $tos) (i32.const 4)))
   (!def_word "LATEST" "$latest")
 
   ;; High-level words
@@ -1040,8 +1077,11 @@ EOF
     (i32.store8 (get_global $cp) (i32.const 0x00))
     (set_global $cp (i32.add (get_global $cp) (i32.const 1))))
 
-  (func $compilePop
-    (call $emitICall (i32.const 2) (i32.const !popIndex)))
+  ;; TODO
+  (func $compilePush)
+
+  ;; TODO
+  (func $compilePop)
 
   (func $emitICall (param $type i32) (param $n i32)
     (call $emitConst (get_local $n))
@@ -1108,15 +1148,17 @@ EOF
   ;; Word helper function
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-  (func $push (export "push") (param $v i32)
-    (i32.store (get_global $tos) (get_local $v))
+  (func (export "push") (param $v i32)
+    (i32.store (get_global $tos) (get_global $v))
     (set_global $tos (i32.add (get_global $tos) (i32.const 4))))
-  (elem (i32.const !pushIndex) $push)
 
-  (func $pop (export "pop") (result i32)
+  (func (export "pop") (result i32)
     (set_global $tos (i32.sub (get_global $tos) (i32.const 4)))
     (i32.load (get_global $tos)))
-  (elem (i32.const !popIndex) $pop)
+
+  (func $push (param $tos i32) (param $v i32) (result i32)
+    (i32.store (get_local $tos) (get_local $v))
+    (tee_local $tos (i32.add (get_local $tos) (i32.const 4))))
 
   (func $display
     (local $p i32)
