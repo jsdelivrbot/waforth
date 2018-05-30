@@ -989,12 +989,22 @@ EOF
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   (func $compilePushConst (param $n i32)
+    (call $emitGetGlobal (i32.const !tosIndex))
     (call $emitConst (get_local $n))
-    (call $emitICall (i32.const 1) (i32.const !pushIndex)))
+    (call $emitStore)
+    (call $emitGetGlobal (i32.const !tosIndex))
+    (call $emitConst (i32.const 4))
+    (call $emitAdd)
+    (call $emitSetGlobal (i32.const !tosIndex)))
 
   (func $compilePushLocal (param $n i32)
+    (call $emitGetGlobal (i32.const !tosIndex))
     (call $emitGetLocal (get_local $n))
-    (call $emitICall (i32.const 1) (i32.const !pushIndex)))
+    (call $emitStore)
+    (call $emitGetGlobal (i32.const !tosIndex))
+    (call $emitConst (i32.const 4))
+    (call $emitAdd)
+    (call $emitSetGlobal (i32.const !tosIndex)))
 
   (func $compileIf
     (call $compilePop)
@@ -1080,9 +1090,14 @@ EOF
     (set_global $cp (i32.add (get_global $cp) (i32.const 1)))
     (i32.store8 (get_global $cp) (i32.const 0x00))
     (set_global $cp (i32.add (get_global $cp) (i32.const 1))))
-
+  
   (func $compilePop
-    (call $emitICall (i32.const 2) (i32.const !popIndex)))
+    (call $emitGetGlobal (i32.const !tosIndex))
+    (call $emitConst (i32.const 4))
+    (call $emitSub)
+    (call $emitSetGlobal (i32.const !tosIndex))
+    (call $emitGetGlobal (i32.const !tosIndex))
+    (call $emitLoad))
 
   (func $emitICall (param $type i32) (param $n i32)
     (call $emitConst (get_local $n))
