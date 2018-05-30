@@ -17,6 +17,7 @@ class WAForth {
     const { skipPrelude } = options;
     let table;
     let memory;
+    let tos;
     const buffer = (this.buffer = []);
 
     return WebAssembly.instantiate(wasmModule, {
@@ -63,7 +64,7 @@ class WAForth {
           // console.log("Load", index, new Uint8Array(data), arrayToBase64(data));
           var module = new WebAssembly.Module(data);
           new WebAssembly.Instance(module, {
-            env: { table, tableBase: index, memory, tos: -1 }
+            env: { table, tableBase: index, memory, tos }
           });
         }
       }
@@ -71,6 +72,7 @@ class WAForth {
       this.core = instance.instance;
       table = this.core.exports.table;
       memory = this.core.exports.memory;
+      tos = this.core.exports.tos;
       if (!skipPrelude) {
         this.core.exports.loadPrelude();
       }

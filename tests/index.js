@@ -19,7 +19,7 @@ describe("WAForth", () => {
         memory = new Int32Array(core.memory.buffer, 0, 0x30000);
         memory8 = new Uint8Array(core.memory.buffer, 0, 0x30000);
         // dictionary = new Uint8Array(core.memory.buffer, 0x1000, 0x1000);
-        stack = new Int32Array(core.memory.buffer, core.tos(), 0x100);
+        stack = new Int32Array(core.memory.buffer, core.tos.value, 0x100);
       },
       err => {
         console.error(err);
@@ -77,14 +77,14 @@ describe("WAForth", () => {
 
   function here() {
     run("HERE");
-    const result = memory[core.tos() / 4 - 1];
+    const result = memory[core.tos.value / 4 - 1];
     run("DROP");
     return result;
   }
 
   function latest() {
     run("LATEST");
-    const result = memory[core.tos() / 4 - 1];
+    const result = memory[core.tos.value / 4 - 1];
     run("DROP");
     return result;
   }
